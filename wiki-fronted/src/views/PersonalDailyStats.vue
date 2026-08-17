@@ -20,16 +20,72 @@
         <LoadingSpinner :absolute="false" />
       </div>
       <template v-else>
-        <div v-if="!chartData.rows.length" class="empty-state">
+        <div v-if="!sortedList.length" class="empty-state">
           <p>{{ translate('personalCenter.dailyStatsEmpty') }}</p>
         </div>
         <div v-else class="chart-wrap">
-          <tiny-chart-line
-            :data="chartData"
-            :settings="chartSettings"
-            width="100%"
-            height="400px"
-          />
+          <!-- 原生 SVG 折线图，避免引入 echarts/huicharts -->
+          <svg
+            ref="svgRef"
+            class="line-chart-svg"
+            :viewBox="`0 0 ${W} ${H}`"
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <!-- 网格线 -->
+            <line
+              v-for="i in gridLines"
+              :key="'g' + i"
+              :x1="PAD_L"
+              :y1="yScale(i)"
+              :x2="W - PAD_R"
+              :y2="yScale(i)"
+              stroke="#e8e8e8"
+              stroke-width="1"
+            />
+            <!-- Y 轴标签 -->
+            <text
+              v-for="i in gridLines"
+              :key="'yl' + i"
+              :x="PAD_L - 6"
+              :y="yScale(i) + 4"
+              text-anchor="end"
+              font-size="11"
+              fill="#999"
+            >{{ i }}</text>
+            <!-- X 轴标签 -->
+            <text
+              v-for="(pt, idx) in xPoints"
+              :key="'xl' + idx"
+              :x="pt"
+              :y="H - PAD_B + 16"
+              text-anchor="middle"
+              font-size="10"
+              fill="#999"
+            >{{ xLabels[idx] }}</text>
+            <!-- 折线 + 点 -->
+            <template v-for="(series, si) in seriesList" :key="si">
+              <polyline
+                :points="series.points"
+                fill="none"
+                :stroke="COLORS[si]"
+                stroke-width="2"
+                stroke-linejoin="round"
+              />
+              <circle
+                v-for="(pt, pi) in series.dots"
+                :key="pi"
+                :cx="pt.x"
+                :cy="pt.y"
+                r="3"
+                :fill="COLORS[si]"
+              />
+            </template>
+            <!-- 图例 -->
+            <g v-for="(s, si) in seriesList" :key="'leg' + si" :transform="`translate(${PAD_L + si * 90}, ${H - 8})`">
+              <rect x="0" y="-8" width="12" height="4" :fill="COLORS[si]" rx="2" />
+              <text x="16" y="0" font-size="11" :fill="COLORS[si]">{{ s.label }}</text>
+            </g>
+          </svg>
         </div>
       </template>
     </div>
@@ -38,7 +94,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { TinyHuichartsLine as TinyChartLine } from '@opentiny/vue-huicharts'
 import { DatePicker as TinyDatePicker, Modal } from '@opentiny/vue'
 import { userApi, type DailyStatItem } from '../api/user'
 import { t } from '../i18n'
@@ -50,6 +105,22 @@ const localeStore = useLocaleStore()
 const loading = ref(false)
 const rawList = ref<DailyStatItem[]>([])
 
+// SVG 画布尺寸常量
+const W = 800
+const H = 300
+const PAD_L = 40
+const PAD_R = 20
+const PAD_T = 20
+const PAD_B = 36
+const COLORS = ['#4e83fd', '#35b377', '#f5a524']
+
+const METRIC_KEYS = ['reads', 'collections', 'likes'] as const
+const METRIC_I18N: Record<string, string> = {
+  reads: 'personalCenter.statsReads',
+  collections: 'personalCenter.statsCollect',
+  likes: 'personalCenter.statsLike'
+}
+
 function formatDate(d: Date): string {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -57,7 +128,6 @@ function formatDate(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
-/** 默认最近一个月 [开始, 结束] */
 function getDefaultDateRange(): [string, string] {
   const end = new Date()
   const start = new Date()
@@ -67,34 +137,12 @@ function getDefaultDateRange(): [string, string] {
 
 const dateRange = ref<[string, string]>(getDefaultDateRange())
 
-const translate = (key: string, params?: Record<string, string>) => {
+const translate = (key: string) => {
   void localeStore.localeKey
-  return t(key, params)
+  return t(key)
 }
 
-const onDateChange = () => {
-  fetchStats()
-}
-
-// 指标字段与 i18n 的映射，对应接口 { date, reads, collections, likes }
-const METRIC_KEYS = ['reads', 'collections', 'likes'] as const
-const METRIC_I18N: Record<string, string> = {
-  reads: 'personalCenter.statsReads',
-  collections: 'personalCenter.statsCollect',
-  likes: 'personalCenter.statsLike'
-}
-
-function formatChartDate(dateStr: string): string {
-  if (!dateStr) return ''
-  try {
-    const d = new Date(dateStr)
-    const m = d.getMonth() + 1
-    const day = d.getDate()
-    return `${m}/${day}`
-  } catch {
-    return dateStr
-  }
-}
+const onDateChange = () => { fetchStats() }
 
 function getNum(item: DailyStatItem, key: string): number {
   const v = key === 'reads' ? item.reads : key === 'collections' ? item.collections : item.likes
@@ -102,35 +150,63 @@ function getNum(item: DailyStatItem, key: string): number {
   return Number.isFinite(n) ? n : 0
 }
 
-const chartData = computed(() => {
-  const list = [...rawList.value].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  )
-  const columns = ['date', ...METRIC_KEYS]
-  const rows = list.map((r) => {
-    const row: Record<string, string | number> = {
-      date: formatChartDate(r.date)
-    }
-    METRIC_KEYS.forEach((k) => {
-      row[k] = getNum(r, k)
-    })
-    return row
-  })
-  return { columns, rows }
+function fmtXLabel(dateStr: string): string {
+  try {
+    const d = new Date(dateStr)
+    return `${d.getMonth() + 1}/${d.getDate()}`
+  } catch { return dateStr }
+}
+
+const sortedList = computed(() =>
+  [...rawList.value].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+)
+
+const xLabels = computed(() => sortedList.value.map((r) => fmtXLabel(r.date)))
+
+// X 坐标列表
+const xPoints = computed(() => {
+  const n = sortedList.value.length
+  if (n === 0) return []
+  const chartW = W - PAD_L - PAD_R
+  return sortedList.value.map((_, i) => PAD_L + (i / Math.max(n - 1, 1)) * chartW)
 })
 
-const chartSettings = computed(() => {
-  const labelMap: Record<string, string> = {}
-  METRIC_KEYS.forEach((k) => {
-    labelMap[k] = translate(METRIC_I18N[k] || k)
+// 最大值（用于 Y 轴缩放）
+const maxVal = computed(() => {
+  let m = 0
+  sortedList.value.forEach((r) => {
+    METRIC_KEYS.forEach((k) => { m = Math.max(m, getNum(r, k)) })
   })
-  return {
-    dimension: ['date'],
-    metrics: chartData.value.columns.filter((c) => c !== 'date'),
-    labelMap,
-    smooth: true
-  }
+  return m || 1
 })
+
+// 网格刻度（4 条）
+const gridLines = computed(() => {
+  const step = Math.ceil(maxVal.value / 4)
+  return [0, step, step * 2, step * 3, step * 4]
+})
+
+const chartH = H - PAD_T - PAD_B
+
+function yScale(v: number): number {
+  return PAD_T + chartH - (v / (gridLines.value[gridLines.value.length - 1] || 1)) * chartH
+}
+
+const seriesList = computed(() =>
+  METRIC_KEYS.map((k, si) => {
+    const dots = sortedList.value.map((r, i) => ({
+      x: xPoints.value[i] ?? 0,
+      y: yScale(getNum(r, k))
+    }))
+    const points = dots.map((d) => `${d.x},${d.y}`).join(' ')
+    return {
+      label: translate(METRIC_I18N[k] ?? k),
+      color: COLORS[si],
+      dots,
+      points
+    }
+  })
+)
 
 const fetchStats = async () => {
   try {
@@ -148,15 +224,11 @@ const fetchStats = async () => {
   }
 }
 
-onMounted(() => {
-  fetchStats()
-})
+onMounted(() => { fetchStats() })
 </script>
 
 <style scoped lang="less">
-.daily-stats-page {
-  width: 100%;
-}
+.daily-stats-page { width: 100%; }
 
 .content-header {
   display: flex;
@@ -174,13 +246,10 @@ onMounted(() => {
   color: #333;
 }
 
-.date-range-wrap {
-  flex-shrink: 0;
-}
+.date-range-wrap { flex-shrink: 0; }
 
 .stats-content {
   width: 100%;
-
   &.loading-active {
     display: flex;
     justify-content: center;
@@ -203,8 +272,11 @@ onMounted(() => {
   font-size: 15px;
 }
 
-.chart-wrap {
+.chart-wrap { width: 100%; min-height: 300px; }
+
+.line-chart-svg {
   width: 100%;
-  min-height: 400px;
+  height: 300px;
+  display: block;
 }
 </style>

@@ -5,8 +5,6 @@ import '@opentiny/vue-theme/index.css'
 import App from './App.vue'
 import { router } from './router'
 import { initTheme } from './utils/theme'
-import TinyVue from '@opentiny/vue'
-
 // 一些旧浏览器或内置 WebView 不支持 crypto.randomUUID，这里做一次全局兼容处理
 if (typeof window !== 'undefined') {
   const g: any = window as any
@@ -58,9 +56,6 @@ initTheme()
 
 const app = createApp(App)
 const pinia = createPinia()
-
-// 使用 OpenTiny Vue 插件（这会自动注册所有指令和组件，包括 v-loading）
-app.use(TinyVue)
 
 app.use(pinia)
 app.use(router)

@@ -303,7 +303,7 @@
       class="file-preview-dialog"
       @close="filePreviewVisible = false"
     >
-      <div class="file-preview-content" v-loading="false">
+      <div class="file-preview-content">
         <!-- 图片预览 -->
         <div v-if="previewFileType === 'image'" class="image-preview-container">
           <tiny-image

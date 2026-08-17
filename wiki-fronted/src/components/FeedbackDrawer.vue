@@ -125,90 +125,6 @@ import { useDrawerResponsive, COMPACT_RICH_TEXT_TOOLBAR } from '../composables/u
 import FluentEditorV4 from './FluentEditorV4.vue'
 // @ts-ignore
 import LoadingSpinner from '../components/LoadingSpinner.vue'
-import FluentEditor, {
-  FULL_TOOLBAR,
-  generateToolbarTip,
-  generateTableUp,
-  CollaborationModule,
-} from '@opentiny/fluent-editor';
-import '@opentiny/fluent-editor/style.css';
-import '@opentiny/vue-theme/fluent-editor/index.css';
-
-// emoji 表情
-import data from '@emoji-mart/data';
-import { computePosition } from '@floating-ui/dom';
-import type { EmojiMartData } from '@emoji-mart/data';
-import { Picker } from 'emoji-mart';
-
-// table 表格
-import {
-  defaultCustomSelect,
-  TableMenuContextmenu,
-  TableSelection,
-  TableUp,
-} from 'quill-table-up';
-import 'quill-table-up/index.css';
-import 'quill-table-up/table-creator.css';
-
-// toolbar-tip 工具栏提示
-import QuillToolbarTip from 'quill-toolbar-tip';
-import 'quill-toolbar-tip/dist/index.css';
-
-// formula 可编辑公式
-import type { MathliveModule } from '@opentiny/fluent-editor';
-import 'mathlive';
-import 'mathlive/static.css';
-import 'mathlive/fonts.css';
-
-// markdown 操作
-import MarkdownShortcuts from 'quill-markdown-shortcuts';
-
-// mind-map 思维导图
-import SimpleMindMap from 'simple-mind-map';
-import Drag from 'simple-mind-map/src/plugins/Drag.js';
-import Export from 'simple-mind-map/src/plugins/Export.js';
-import Themes from 'simple-mind-map-plugin-themes';
-import nodeIconList from 'simple-mind-map/src/svg/icons';
-
-// flow-chart 流程图
-import LogicFlow from '@logicflow/core';
-import { DndPanel, SelectionSelect, Snapshot } from '@logicflow/extension';
-
-// syntax 语法高亮
-import hljs from 'highlight.js';
-import 'highlight.js/styles/atom-one-dark.css';
-
-// screenshot 截屏
-import Html2Canvas from 'html2canvas';
-window.Html2Canvas = Html2Canvas;
-
-// 公式
-import katex from 'katex';
-import 'katex/dist/katex.min.css';
-window.katex = katex;
-
-// mention @提醒
-const searchKey = 'name';
-const mentionList = [
-  {
-    name: 'kagol',
-    cn: '卡哥',
-    followers: 156,
-    avatar: 'https://avatars.githubusercontent.com/u/9566362?v=4',
-  },
-  {
-    name: 'zzcr',
-    cn: '超哥',
-    followers: 10,
-    avatar: 'https://avatars.githubusercontent.com/u/18521562?v=4',
-  },
-  {
-    name: 'hexqi',
-    cn: '小伍哥',
-    followers: 2,
-    avatar: 'https://avatars.githubusercontent.com/u/18585869?v=4',
-  },
-];
 
 // 强制 feedback 编辑内容始终以 delta JSON 形式存储（避免 v4 组件按 HTML 回写）
 const EMPTY_DELTA = JSON.stringify({ ops: [] })
@@ -218,12 +134,6 @@ const feedbackEditorRef = ref<any>(null)
 
 // feedbackContent 作为 v-model 传给 FluentEditorV4
 const feedbackContent = ref<string>(EMPTY_DELTA)
-
-// 注册 Quill 模块（供 FluentEditorV4 内部创建编辑器使用）
-FluentEditor.register({ 'modules/toolbar-tip': generateToolbarTip(QuillToolbarTip) }, true)
-FluentEditor.register({ 'modules/table-up': generateTableUp(TableUp) }, true)
-FluentEditor.register('modules/markdownShortcuts', MarkdownShortcuts)
-FluentEditor.register('modules/collaborative-editing', CollaborationModule, true)
 
 const localeStore = useLocaleStore()
 const {
@@ -235,6 +145,7 @@ const {
 } = useDrawerResponsive()
 const drawerCustomClass = drawerBodyClass('feedback-drawer')
 
+// FeedbackDrawer 仅使用 FluentEditorV4 组件，模块注册由 FluentEditorV4 内部统一处理
 const feedbackEditorOptions = computed(() => {
   if (isCompactLayout.value) {
     return {
@@ -246,85 +157,20 @@ const feedbackEditorOptions = computed(() => {
       }
     }
   }
-
   return {
     theme: 'snow',
     modules: {
-      toolbar: {
-        container: [...FULL_TOOLBAR, ['mind-map', 'flow-chart']],
-        handlers: {
-          formula(this: any) {
-            const mathlive = this.quill.getModule('mathlive') as MathliveModule
-            mathlive.createDialog('e=mc^2')
-          }
-        }
-      },
-    file: true,
-    markdownShortcuts: true,
-    syntax: { hljs },
-    counter: true,
-    mathlive: true,
-    emoji: {
-      emojiData: data as EmojiMartData,
-      EmojiPicker: Picker,
-      emojiPickerPosition: computePosition,
+      file: true,
+      markdownShortcuts: true,
+      counter: true,
+      mathlive: true,
     },
-    'toolbar-tip': {
-      defaultTooltipOptions: {
-        tipHoverable: false,
-      },
-    },
-    'table-up': {
-      customSelect: defaultCustomSelect,
-      modules: [{ module: TableSelection }, { module: TableMenuContextmenu }],
-    },
-    'mind-map': {
-      deps: {
-        SimpleMindMap,
-        Themes,
-        Drag,
-        Export,
-        nodeIconList,
-      },
-    },
-    'flow-chart': {
-      deps: {
-        LogicFlow,
-        DndPanel,
-        SelectionSelect,
-        Snapshot,
-      },
-    },
-    mention: {
-      containerClass: 'ql-mention-list-container__custom-list',
-      itemKey: 'cn',
-      searchKey,
-      search(term: string) {
-        return mentionList.filter((item) => {
-          return item[searchKey] && String(item[searchKey]).includes(term)
-        })
-      },
-      renderMentionItem(item: any) {
-        return `
-          <div class="item-avatar">
-            <img src="${item.avatar}">
-          </div>
-          <div class="item-info">
-            <div class="item-name">${item.cn}</div>
-            <div class="item-desc">${item.followers}粉丝</div>
-          </div>
-        `
-      },
-    },
-  },
   }
 })
 
 const previewEditorOptions = computed(() => ({
   theme: 'snow',
-  modules: {
-    toolbar: false,
-  },
+  modules: { toolbar: false },
 }))
 const props = defineProps<{
   visible: boolean
