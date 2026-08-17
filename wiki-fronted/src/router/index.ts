@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { authUtils } from '../utils/auth'
 import { hasPermission } from '../utils/permission'
 import { useUserStore } from '../stores/user'
+import { doneTopProgress, startTopProgress } from '../utils/topProgress'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -234,6 +235,7 @@ const router = createRouter({
 
 // 路由守卫：检查认证状态和权限
 router.beforeEach(async (to, _from, next) => {
+  startTopProgress()
   const isAuthenticated = authUtils.isAuthenticated()
   
   // 如果访问需要认证的页面但未登录，跳转到登录页
@@ -283,6 +285,14 @@ router.beforeEach(async (to, _from, next) => {
   }
   
   next()
+})
+
+router.afterEach(() => {
+  doneTopProgress()
+})
+
+router.onError(() => {
+  doneTopProgress()
 })
 
 export { router }

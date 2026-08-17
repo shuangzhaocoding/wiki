@@ -3,6 +3,7 @@ import { authUtils } from '../utils/auth'
 import { Modal } from '@opentiny/vue'
 import { router } from '../router'
 import { getLocaleBcp47 } from '../i18n'
+import { doneRequestProgress, startRequestProgress } from '../utils/topProgress'
 
 // 创建 axios 实例
 // 使用相对路径，通过 Vite 代理转发到后端
@@ -17,6 +18,9 @@ const request = axios.create({
 // 请求拦截器：添加 token
 request.interceptors.request.use(
   (config) => {
+    if (!config.headers?.['X-Skip-Progress']) {
+      startRequestProgress()
+    }
     const authHeader = authUtils.getAuthHeader()
     if (authHeader) {
       config.headers.Authorization = authHeader
@@ -59,6 +63,9 @@ function showRequestError(message: string) {
 // 响应拦截器：处理错误
 request.interceptors.response.use(
   (response) => {
+    if (!response.config.headers?.['X-Skip-Progress']) {
+      doneRequestProgress()
+    }
     const res: ApiResponse = response.data
 
     if (res.code === 200) {
@@ -81,6 +88,9 @@ request.interceptors.response.use(
     })
   },
   (error) => {
+    if (!error.config?.headers?.['X-Skip-Progress']) {
+      doneRequestProgress()
+    }
     if (error.response) {
       const res: ApiResponse = error.response.data || {}
       const errMsg = res.message || error.message || '请求失败'

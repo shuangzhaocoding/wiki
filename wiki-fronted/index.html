@@ -5,9 +5,64 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>wiki-fronted</title>
+    <style>
+      #wiki-top-progress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 100000;
+        width: 100%;
+        height: 3px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.24s ease;
+      }
+      #wiki-top-progress.is-active {
+        opacity: 1;
+      }
+      #wiki-top-progress.is-done {
+        opacity: 0;
+      }
+      #wiki-top-progress .wiki-top-progress-bar {
+        height: 100%;
+        width: 0;
+        background: var(--primary-gradient, linear-gradient(90deg, #8b5cf6, #6d28d9));
+        box-shadow: 0 0 8px var(--primary-color, #8b5cf6);
+        transition: width 0.22s ease-out;
+        position: relative;
+      }
+      #wiki-top-progress .wiki-top-progress-bar::after {
+        content: '';
+        position: absolute;
+        right: 0;
+        top: 0;
+        width: 80px;
+        height: 100%;
+        transform: rotate(3deg) translateY(-2px);
+        box-shadow: 0 0 10px var(--primary-color, #8b5cf6), 0 0 5px var(--primary-color, #8b5cf6);
+      }
+    </style>
   </head>
   <body>
+    <div id="wiki-top-progress" class="is-active" aria-hidden="true">
+      <div class="wiki-top-progress-bar" style="width: 12%"></div>
+    </div>
     <div id="app"></div>
+    <script>
+      (function () {
+        var bar = document.querySelector('#wiki-top-progress .wiki-top-progress-bar')
+        if (!bar) return
+        var current = 12
+        var timer = setInterval(function () {
+          if (current >= 82) return
+          current += Math.max(0.6, (82 - current) * 0.06)
+          bar.style.width = current + '%'
+        }, 280)
+        window.__wikiTopProgressBootstrap = {
+          stop: function () { clearInterval(timer) }
+        }
+      })()
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

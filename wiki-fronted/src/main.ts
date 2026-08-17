@@ -5,6 +5,7 @@ import '@opentiny/vue-theme/index.css'
 import App from './App.vue'
 import { router } from './router'
 import { initTheme } from './utils/theme'
+import { installTopProgress } from './utils/topProgress'
 // 一些旧浏览器或内置 WebView 不支持 crypto.randomUUID，这里做一次全局兼容处理
 if (typeof window !== 'undefined') {
   const g: any = window as any
@@ -53,6 +54,7 @@ if (typeof window !== 'undefined') {
 
 // 初始化主题
 initTheme()
+installTopProgress()
 
 const app = createApp(App)
 const pinia = createPinia()
